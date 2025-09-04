@@ -1,6 +1,6 @@
-from .models import RequestLog
-from django.utils.timezone import now
-from ipware import get_client_ip   # safer IP extraction, works with proxies
+from django.http import HttpResponseForbidden
+
+from ip_tracking.models import BlockedIP, RequestLog
 
 
 class IPLoggingMiddleware:
@@ -8,17 +8,45 @@ class IPLoggingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Extract client IP
-        ip, is_routable = get_client_ip(request)
-        if ip is None:
-            ip = "0.0.0.0"  # fallback if IP cannot be determined
+        # Check if IP is blocked
+        ip_address = self.get_client_ip(request)
 
-        # Save request log asynchronously in DB
+        if BlockedIP.objects.filter(ip_address=ip_address).exists():
+            return HttpResponseForbidden(
+                "Access Denied: Your IP address has been blocked."
+            )
+
+        # Process request
+        response = self.get_response(request)
+
+        # Get geolocation data
+        geo_data = {}
+        if not ip_address.startswith(
+            ("127.", "10.", "192.168.", "172.")
+        ):  # Skip private IPs
+            geo_data = RequestLog.get_geolocation_data(ip_address)
+
+        # Log request details after response is processed
+        ip_address = self.get_client_ip(request)
+
+        # Log the request
         RequestLog.objects.create(
-            ip_address=ip,
-            timestamp=now(),
-            path=request.path
+            ip_address=ip_address,
+            path=request.path,
+            method=request.method,
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            country=geo_data.get("country"),
+            city=geo_data.get("city"),
+            latitude=geo_data.get("latitude"),
+            longitude=geo_data.get("longitude"),
         )
 
-        response = self.get_response(request)
         return response
+
+    def get_client_ip(self, request):
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(",")[0]
+        else:
+            ip = request.META.get("REMOTE_ADDR")
+        return ip
