@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'ratelimit',
     # local apps
     'ip_tracking.apps.IpTrackingConfig',
 ]
@@ -49,7 +50,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'ip_tracking.middleware.IPLoggingMiddleware'
+    'ip_tracking.middleware.IPLoggingMiddleware',
+    'ratelimit.middleware.RatelimitMiddleware',
 ]
 
 ROOT_URLCONF = 'alx_backend_security.urls'
